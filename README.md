@@ -20,6 +20,8 @@ List of commands available currently in this **Linux Shell**:
 
 | Command | Options | Parameters | Description | Syntax |
 |---------|-------|-----|-------------|--------|
+|`exit`|`None` | `None` | Exits the shell. | `exit` |
+|`help` | `None` | `None` | Lists the builtin commands | `help` |
 |`cd`| `None` | `<path>` |Changes the current directory to the specified path. | `cd <path>` |
 |`pwd`| `None` | `None` | Prints working directory. | `pwd`|
 | `ld` | `-r ` : Recursively apply `ld` on subdirectories | `[directory1] ... [directoryN]` | Lists files and directories within a specified directory. | `ld [directory1] ... [directoryN]` |
