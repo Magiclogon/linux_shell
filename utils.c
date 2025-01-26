@@ -5,8 +5,69 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <pwd.h>
 #include "utils.h"
 #include "commands.h"
+
+unsigned long get_boot_time() {
+
+    // boot time is in the file /proc/stat
+    FILE *boot_time_file = fopen(BOOT_TIME_FILE, "r");
+    if(!boot_time_file) {
+        perror("Couldn't open the /proc/stat file.");
+        return 0;
+    }
+
+    char line[256];
+    unsigned long btime;
+
+    // Looking for line that starts with "Uid"
+    while(fgets(line, sizeof(line), boot_time_file)) {
+        if(strncmp(line, "btime", 5) == 0) {
+            sscanf(line, "btime %lu", &btime);
+            break;
+        }
+    }
+    fclose(boot_time_file);
+    return btime;
+}
+
+uid_t get_process_uid(char *pid) {
+    
+    // Process UID is in the file /proc/pid/status
+    char status_path[256];
+    FILE *status_file;
+
+    snprintf(status_path, sizeof(status_path), "%s/%s/%s", PROC_DIR, pid, STATUS_FILE);
+
+    // Openning the file and verifying it is open.
+    status_file = fopen(status_path, "r");
+
+    if(!status_file) {
+        perror("Couldn't open the status file.\n");
+        exit(EXIT_FAILURE);
+    }
+    
+    char line[256];
+    uid_t uid = -1;
+
+    // Looking for line that starts with "Uid:"
+    while(fgets(line, sizeof(line), status_file) != NULL) {
+        if(strncmp(line, "Uid", 3) == 0) {
+            sscanf(line, "Uid:\t%u", &uid);
+            break;
+        }
+    }
+
+    fclose(status_file);
+    return uid;
+}
+
+char *get_name_from_uid(uid_t uid) {
+    struct passwd *pws;
+    pws = getpwuid(uid);
+    return pws->pw_name;
+}
 
 int is_param(char *params[], char *arg) {
     for(int i = 0; params[i] != NULL; i++) {

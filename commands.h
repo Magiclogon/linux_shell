@@ -14,6 +14,10 @@ int shell_rmvd(char **args);
 int shell_mkd(char **args);
 int shell_cpy(char **args);
 
+// Processes
+int shell_kill(char **args);
+int shell_lp(char **args);
+
 // Number or commands
 int num_builtin_com(void);
 

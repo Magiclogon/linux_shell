@@ -7,12 +7,15 @@
 #include <sys/wait.h>
 #include <dirent.h>
 #include <utime.h>
+#include <ctype.h>
+#include <time.h>
+#include <errno.h>
 #include "commands.h"
 #include "utils.h"
 
-char *builtin_str[] =  {"cd", "help", "exit", "pwd", "ld", "cf", "rmvf", "rmvd", "mkd", "cpy"};
+char *builtin_str[] =  {"cd", "help", "exit", "pwd", "ld", "cf", "rmvf", "rmvd", "mkd", "cpy", "kill", "lp"};
 
-int (*builtin_func[]) (char**) = { &shell_cd, &shell_help, &shell_exit, &shell_pwd, &shell_ld, &shell_cf, &shell_rmvf, &shell_rmvd, &shell_mkd, &shell_cpy}; 
+int (*builtin_func[]) (char**) = { &shell_cd, &shell_help, &shell_exit, &shell_pwd, &shell_ld, &shell_cf, &shell_rmvf, &shell_rmvd, &shell_mkd, &shell_cpy, &shell_kill, &shell_lp}; 
 
 int num_builtin_com() {
     return sizeof(builtin_str) / sizeof(char*);
@@ -108,8 +111,9 @@ int shell_rmvf(char **args) {
     
     struct stat s;
 
-    if(args[1] != NULL) {
-        stat(args[1], &s);
+    int i;
+    for(i = 1; args[i] != NULL; i++) {
+        stat(args[i], &s);
         if((s.st_mode & S_IFMT) == S_IFREG) {
             if(remove(args[1]) == 0) {
                 printf("File removed.\n");
@@ -118,16 +122,16 @@ int shell_rmvf(char **args) {
             }
         } 
         else if((s.st_mode & S_IFMT) == S_IFDIR) {
-            printf("A directory was provided and not a file.\n");
+            printf("A directory was provided and not a file: %s\n", args[i]);
         }
         else {
-            printf("Error: Not found\n");
+            printf("Error: Not found: %s\n", args[i]);
         }
     }
-    else {
-        printf("Missing argument.\n");
-    }
 
+    if(i == 1) {
+        printf("No argument was given.\n");
+    }
     return 1;
 }
 
@@ -283,5 +287,110 @@ int shell_cpy(char **args) {
         printf("Argument missing.\n");
     }
     return 1;
+}
 
+int shell_kill(char **args) {
+     
+    int i;
+    for(i = 1; args[i] != NULL; i++) {
+
+        char *endptr;
+        errno = 0;
+
+        long pid_value = strtol(args[i], &endptr, 10);
+
+        if((errno != 0 || *endptr != '\0' || pid_value < 0)) {
+            printf("Invalid pid: %s\n", args[i]);
+            continue;
+        }
+
+        pid_t pid = (pid_t) pid_value;
+
+        if(kill(pid, SIGKILL) == 0) {
+            printf("Process with pid: %s was killed.\n", args[i]);
+        }
+        else {
+            printf("Couldn't kill process with pid: %s.\n", args[i]);
+        }
+    }
+
+    if(i == 1) {
+        printf("No argument was given.\n");
+    }
+}
+
+int shell_lp(char **args) {
+
+    struct dirent *direc_comp;
+    DIR *proc_dir = opendir(PROC_DIR);
+
+    if(!proc_dir) {
+        printf("Couldn't open the /proc file.");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("%-32s %-5s %-10s %-10s %s\n", "USER", "PID", "MEM (kB)", "START TIME", "COMMAND");
+
+    while((direc_comp = readdir(proc_dir)) != NULL) {
+        if(!isxdigit(direc_comp -> d_name[0])) {
+            continue;
+        }
+
+        char stat_path[256], cmdline_path[256], statm_path[256];
+
+        snprintf(stat_path, sizeof(stat_path), "%s/%s/%s", PROC_DIR, direc_comp->d_name, STAT_FILE);
+        snprintf(cmdline_path, sizeof(cmdline_path), "%s/%s/%s", PROC_DIR, direc_comp->d_name, CMDLINE_FILE);
+        snprintf(statm_path, sizeof(statm_path), "%s/%s/%s", PROC_DIR, direc_comp->d_name, STATM_FILE);
+
+        FILE *stat_file = fopen(stat_path, "r");
+        FILE *cmdline_file = fopen(cmdline_path, "r");
+        FILE *statm_file = fopen(statm_path, "r");
+
+        if (!stat_file || !cmdline_file) {
+            if (stat_file) fclose(stat_file);
+            if (cmdline_file) fclose(cmdline_file);
+            if (statm_file) fclose(statm_file);
+            continue;
+        }
+
+        // Fetching pid, command, state and starting time.
+        int pid;
+        char comm[256];
+        char state;
+        unsigned long start_time;
+
+        fscanf(stat_file, "%d %255s %c %*s %*s %*s %*s %*s %*s %*s %*s %*s %*s %*s %*s %*s %*s %*s %*s %*s %*s %lu", &pid, comm, &state, &start_time);
+        fclose(stat_file);
+
+        // Fetching username.
+        uid_t uid = get_process_uid(direc_comp->d_name);
+        char *user = get_name_from_uid(uid);
+
+        // Fetching mem usage.
+        long mem_usage;
+        fscanf(statm_file, "%ld", &mem_usage);
+        fclose(statm_file);
+
+        mem_usage *= 4; // Converting to kB
+
+        // Fetching command from cmdline file.
+        char command[256];
+        if(fgets(command, sizeof(command), cmdline_file) == NULL) {
+            strncpy(command, comm, sizeof(command));
+        }
+        fclose(cmdline_file);
+
+        // Get the process starting time.
+        unsigned long boot_time = get_boot_time();
+
+        time_t process_start_time = boot_time + (start_time / sysconf(_SC_CLK_TCK));
+        char start_time_str[32];
+        strftime(start_time_str, sizeof(start_time_str), "%H:%M:%S", localtime(&process_start_time));
+
+        // Printing the line
+        printf("%-32s %-5d %-10ld %-10s %s\n", user, pid, mem_usage, start_time_str,command);
+    }
+
+    closedir(proc_dir);
+    return 1;
 }
