@@ -13,6 +13,9 @@ int shell_rmvf(char **args);
 int shell_rmvd(char **args);
 int shell_mkd(char **args);
 int shell_cpy(char **args);
+int shell_sc(char **args);
+int shell_schead(char **args);
+int shell_sctail(char **args);
 
 // Processes
 int shell_kill(char **args);

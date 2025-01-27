@@ -32,6 +32,8 @@ List of commands available currently in this **Linux Shell**:
 | `cpy` | `None` | `<source> <destination>` | Copies a file or a directory to a destination. | `cpy <source> <destination>` |
 | `kill` | `None` | `<pid1> [pid2] ... [pidN]` | Kills processes based on their **pid**. | `kill <pid1> [pid2] ... [pidN]` |
 | `lp` | `None` | `None` | List all running processes with some informations about them. | `lp` |
+| `sc` | `None` | `<file1> [file2] ... [fileN]` | Shows the content of one of multiple files. | `sc <file1> [file2] ... [fileN]` |
+| `schead` | `-n <number>` : Shows the first `number` lines of the file. (Default is 10). | `<file1> [file2] ... [fileN]` | Shows the first 10 lines (by default) of the file. | `schead <file1> [file2] ... [fileN]` |
 
 ## Installation
 

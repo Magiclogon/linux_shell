@@ -13,9 +13,9 @@
 #include "commands.h"
 #include "utils.h"
 
-char *builtin_str[] =  {"cd", "help", "exit", "pwd", "ld", "cf", "rmvf", "rmvd", "mkd", "cpy", "kill", "lp"};
+char *builtin_str[] =  {"cd", "help", "exit", "pwd", "ld", "cf", "rmvf", "rmvd", "mkd", "cpy", "kill", "lp", "sc", "schead"};
 
-int (*builtin_func[]) (char**) = { &shell_cd, &shell_help, &shell_exit, &shell_pwd, &shell_ld, &shell_cf, &shell_rmvf, &shell_rmvd, &shell_mkd, &shell_cpy, &shell_kill, &shell_lp}; 
+int (*builtin_func[]) (char**) = { &shell_cd, &shell_help, &shell_exit, &shell_pwd, &shell_ld, &shell_cf, &shell_rmvf, &shell_rmvd, &shell_mkd, &shell_cpy, &shell_kill, &shell_lp, &shell_sc, &shell_schead}; 
 
 int num_builtin_com() {
     return sizeof(builtin_str) / sizeof(char*);
@@ -338,10 +338,12 @@ int shell_lp(char **args) {
 
         char stat_path[256], cmdline_path[256], statm_path[256];
 
+        // Getting the path ready.
         snprintf(stat_path, sizeof(stat_path), "%s/%s/%s", PROC_DIR, direc_comp->d_name, STAT_FILE);
         snprintf(cmdline_path, sizeof(cmdline_path), "%s/%s/%s", PROC_DIR, direc_comp->d_name, CMDLINE_FILE);
         snprintf(statm_path, sizeof(statm_path), "%s/%s/%s", PROC_DIR, direc_comp->d_name, STATM_FILE);
 
+        // Openning the files and verifying that they're open.
         FILE *stat_file = fopen(stat_path, "r");
         FILE *cmdline_file = fopen(cmdline_path, "r");
         FILE *statm_file = fopen(statm_path, "r");
@@ -392,5 +394,119 @@ int shell_lp(char **args) {
     }
 
     closedir(proc_dir);
+    return 1;
+}
+
+int shell_sc(char **args) {
+    
+    int i;
+    for(i = 1; args[i] != NULL; i++) {
+        FILE *f = fopen(args[i], "r");
+        if(!f) {
+            perror("Couldn't open specified file.\n");
+            continue;
+        }
+
+        printf("\nShowing file: %s\n", args[i]);
+        
+        char c;
+        while((c = fgetc(f)) != EOF) {
+            fputc(c, stdout);
+        }
+    }
+
+    if(i == 1) {
+        printf("No argument was given.\n");
+    }
+
+    return 1;
+}
+
+int shell_schead(char **args) {
+
+    char *params[] = {"-n", NULL};
+
+    int lines_to_read = 10;
+    int j, n;
+    int i;
+
+    for(j = 1; args[j] != NULL; j++) {
+        if(strcmp(args[j], "-n") == 0) {
+            n = 1;
+            break;
+        }
+    }
+
+    if(n == 1) {
+        if((args[j + 1] != NULL && atoi(args[j + 1]) == 0) || args[j + 1] == NULL) {
+            printf("Argument for option -n is required.\n");
+            return 1;
+        }
+        else if((args[j + 1] != NULL && atoi(args[j + 1]) != 0)) {
+            lines_to_read = atoi(args[j + 1]);
+        }
+    }
+
+    for(i = 1; args[i] != NULL; i++) {
+
+        // Skip the -n and it's argument.
+        if(is_param(params, args[i]) || i == j + 1) {
+            continue;
+        }
+        
+        FILE *f = fopen(args[i], "r");
+
+        if(!f) {
+            perror("Couldn't open file to read.\n");
+            continue;
+        }
+
+        char buffer[1024];
+        int line_count = 0;
+
+        while(line_count < lines_to_read) {
+            char *line = NULL;
+            size_t line_length = 0;
+            size_t buffer_length = 0;
+
+            do {
+                if(fgets(buffer, sizeof(buffer), f) == NULL) {
+                    break;
+                }
+
+                buffer_length = strlen(buffer);
+                
+                char *new_line = realloc(line, line_length + buffer_length + 1);
+                if(new_line == NULL) {
+                    fprintf(stderr, "Couldn't reallocate memory.\n");
+                    free(line);
+                    fclose(f);
+                    return 1;
+                }
+                line = new_line;
+
+                memcpy(line + line_length, buffer, buffer_length);
+                line_length += buffer_length;
+                line[line_length] = '\0';
+
+            } while(buffer[buffer_length - 1] != '\n' && !feof(f));
+
+            if(line != NULL) {
+                fputs(line, stdout);
+                free(line);
+                line_count++;
+            }
+
+            if(feof(f)) {
+                break;
+            }
+        }
+        fclose(f);
+    }
+
+    if((i == 1) || (n == 1 && i == 2)) {
+        printf("No argument was given.\n");
+    }
+
     return 1;
 }
