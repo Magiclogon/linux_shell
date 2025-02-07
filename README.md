@@ -11,7 +11,9 @@ This project is done as a personnal project in my free time.
 
 ## Features
 
-Executing multiple commands listed in the documentation bellow.
+- Executing multiple commands listed in the documentation bellow.
+- Output redirection.
+
 
 
 ## Documentation
