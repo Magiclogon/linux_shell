@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <pwd.h>
+#include <fcntl.h>
 #include "utils.h"
 #include "commands.h"
 
@@ -96,8 +97,15 @@ void list_directory(char *dir_path, int rec) {
         while((direc_comp = readdir(directory)) != NULL) {
             
             if(strcmp((direc_comp -> d_name), ".") != 0 && strcmp((direc_comp -> d_name), "..")) {
-                printf("%s\n", direc_comp -> d_name);
 
+                // Color choosing.
+                if((direc_comp -> d_type) == DT_DIR) {
+                    printf("\033[36m%s\033[0m\n", direc_comp -> d_name);
+                } else if ((direc_comp -> d_type) == DT_REG) {
+                    printf("%s\n", direc_comp -> d_name);
+                }
+                
+                // Recusrsion.
                 if((direc_comp -> d_type) == DT_DIR && rec) {
                     char new_dirpath[PATH_MAX_SIZE];
                     strcpy(new_dirpath, dir_path);
@@ -310,12 +318,14 @@ int shell_launch(char **args) {
 
     if(pid < 0) {
         perror("Error forking");
+        return 1;
     } 
     else if (pid == 0) {
+
         if(execvp(args[0], args) == -1) {
             perror("Error");
+            exit(EXIT_FAILURE);
         }
-        exit(EXIT_FAILURE);
     }
     else {
         do {
@@ -332,12 +342,62 @@ int shell_execute(char **args) {
     if(args[0] == NULL) {
         return 1;
     }
-    for(int i = 0; i < num_builtin_com(); i++) {
-        if(strcmp(args[0], builtin_str[i]) == 0) {
-            return (*builtin_func[i])(args);
+
+    // File descriptors and backing up STDIN AND STDOUT DESCRIPTORS
+    int back_out_filed = dup(STDOUT_FILENO);
+    int out_filed = -1;
+    int in_filed = -1;
+
+
+    for(int i = 0; args[i] != NULL; i++) {
+        if(strcmp(args[i], ">") == 0) {
+            out_filed = open(args[i + 1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if(out_filed == -1) {
+                perror("Couldn't open filepath.\n");
+                return 1;
+            }
+
+            args[i] = NULL;
+        }
+
+        else if(strcmp(args[i], ">>") == 0) {
+            out_filed = open(args[i + 1], O_WRONLY | O_APPEND | O_CREAT, S_IRWXU);
+            if(out_filed == -1) {
+                perror("Couldn't open filepath.\n");
+                return 1;
+            }
+            args[i] = NULL;
         }
     }
-    return shell_launch(args);
+
+    // Verifying if there's redirection.
+    if (out_filed != -1) {
+        dup2(out_filed, STDOUT_FILENO);
+        close(out_filed);
+    }
+
+    for(int i = 0; i < num_builtin_com(); i++) {
+        if(strcmp(args[0], builtin_str[i]) == 0) {
+
+            int result = (*builtin_func[i])(args);
+            // Load default FILENO
+            dup2(back_out_filed, STDOUT_FILENO);
+            
+            close(back_out_filed);
+
+            return result;
+        }
+    }
+
+    // If it's not a builtin command.
+    int result = shell_launch(args);
+
+    // Load default FILENO
+    dup2(back_out_filed, STDOUT_FILENO);
+    
+    close(back_out_filed);
+    return result;
+
 }
 
 void shell_loop(void) {
@@ -349,7 +409,7 @@ void shell_loop(void) {
 
     do {
         getcwd(pwd, sizeof(pwd));
-        printf("%s -> ", pwd);
+        printf("\033[1;33m%s\033[0m -> ", pwd);
         line = shell_read_line();
         args = shell_split_line(line);
         status = shell_execute(args);

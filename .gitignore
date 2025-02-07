@@ -1,4 +1,5 @@
 main.o
 utils.o
 commands.o
+comp.sh
 .vscode

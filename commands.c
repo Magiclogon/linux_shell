@@ -115,7 +115,7 @@ int shell_rmvf(char **args) {
     for(i = 1; args[i] != NULL; i++) {
         stat(args[i], &s);
         if((s.st_mode & S_IFMT) == S_IFREG) {
-            if(remove(args[1]) == 0) {
+            if(remove(args[i]) == 0) {
                 printf("File removed.\n");
             } else {
                 printf("Error occured.\n");
